@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp → SMS Relay</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>WhatsApp → SMS Relay</h1>
+      <div class="status-bar">
+        <div class="status-item" id="status-whatsapp">
+          <span class="status-dot"></span>
+          <span class="status-label">WhatsApp</span>
+          <span class="status-text">Initializing...</span>
+        </div>
+        <div class="status-item" id="status-sms">
+          <span class="status-dot"></span>
+          <span class="status-label">SMS Provider</span>
+          <span class="status-text">Checking...</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel qr-panel" id="qr-panel">
+        <h2>Link WhatsApp</h2>
+        <p class="hint">Scan this QR code with WhatsApp on your phone</p>
+        <div class="qr-container" id="qr-container">
+          <div class="qr-placeholder">Waiting for QR code...</div>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-header">
+          <h2>Message Log</h2>
+          <button class="btn-test" id="btn-test" title="Send test SMS">Test SMS</button>
+        </div>
+        <div class="log-container" id="log-container">
+          <div class="log-empty">No messages yet</div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <details class="config-details">
+        <summary>Configuration</summary>
+        <div class="config-grid" id="config-grid"></div>
+      </details>
+    </footer>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
