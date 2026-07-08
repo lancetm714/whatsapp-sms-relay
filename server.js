@@ -56,36 +56,29 @@ async function sendSms(body, from) {
   const senderInfo = from ? `From WhatsApp (${from})` : '';
   const messageBody = senderInfo ? `${senderInfo}: ${body}` : body;
 
-  const smsEntry = {
-    type: 'sms',
-    to: SMS_TO_NUMBER || '(not configured)',
-    body: messageBody,
-    status: 'sending',
-    timestamp: new Date().toISOString(),
-  };
+  const targets = (SMS_TO_NUMBER || '').split(',').map((s) => s.trim()).filter(Boolean);
 
-  if (!twilioClient || !SMS_TO_NUMBER) {
-    smsEntry.status = 'stub';
-    smsEntry.sid = 'dry-run';
-    addMessage(smsEntry);
-    return smsEntry;
+  if (!twilioClient || !targets.length) {
+    addMessage({
+      type: 'sms', to: targets.join(', ') || '(not configured)',
+      body: messageBody, status: 'stub', sid: 'dry-run', timestamp: new Date().toISOString(),
+    });
+    return;
   }
 
-  try {
-    const result = await twilioClient.messages.create({
-      body: messageBody,
-      from: TWILIO_FROM_NUMBER,
-      to: SMS_TO_NUMBER,
-    });
-    smsEntry.status = 'sent';
-    smsEntry.sid = result.sid;
+  for (const to of targets) {
+    const smsEntry = {
+      type: 'sms', to, body: messageBody, status: 'sending', timestamp: new Date().toISOString(),
+    };
+    try {
+      const result = await twilioClient.messages.create({ body: messageBody, from: TWILIO_FROM_NUMBER, to });
+      smsEntry.status = 'sent';
+      smsEntry.sid = result.sid;
+    } catch (err) {
+      smsEntry.status = 'failed';
+      smsEntry.error = err.message;
+    }
     addMessage(smsEntry);
-    return smsEntry;
-  } catch (err) {
-    smsEntry.status = 'failed';
-    smsEntry.error = err.message;
-    addMessage(smsEntry);
-    throw err;
   }
 }
 
@@ -157,8 +150,8 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/send-test', async (req, res) => {
   try {
-    const result = await sendSms('Test from WhatsApp-SMS Relay', 'test');
-    res.json({ success: result.status !== 'failed', sid: result.sid });
+    await sendSms('Test from WhatsApp-SMS Relay', 'test');
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
