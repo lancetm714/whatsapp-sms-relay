@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   relay:
-    image: ghcr.io/lancetm714/whatsapp-sms-relay:main
+    image: ghcr.io/lancetm714/whatsapp-sms-relay:latest
     container_name: whatsapp-sms-relay
     ports:
       - "3000:3000"
