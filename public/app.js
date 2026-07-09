@@ -70,6 +70,13 @@ function appendLog(entry) {
     from.textContent = entry.from + ': ';
     div.appendChild(from);
 
+    if (entry.groupName) {
+      const group = document.createElement('span');
+      group.className = 'group-name';
+      group.textContent = '(' + entry.groupName + ') ';
+      div.appendChild(group);
+    }
+
     if (entry.mediaUrl) {
       const img = document.createElement('img');
       img.className = 'media-thumb';

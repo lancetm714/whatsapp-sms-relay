@@ -121,8 +121,19 @@ whatsapp.on('message', async (msg) => {
   seenMessageIds.add(msg.id.id);
   if (seenMessageIds.size > 10000) seenMessageIds.clear();
 
-  const contact = await msg.getContact();
-  const senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
+  const isGroup = from.endsWith('@g.us');
+  let senderName;
+  let groupName = null;
+
+  if (isGroup) {
+    const chat = await msg.getChat();
+    groupName = chat.name;
+    const authorContact = await whatsapp.getContactById(msg.author);
+    senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+  } else {
+    const contact = await msg.getContact();
+    senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
+  }
 
   if (RELAY_WHATSAPP_FROM) {
     const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
@@ -151,12 +162,16 @@ whatsapp.on('message', async (msg) => {
     raw: from,
     body: body || (mediaUrl ? '[Media]' : ''),
     mediaUrl,
+    groupName,
     timestamp: new Date().toISOString(),
   });
 
   try {
     const smsText = hasMedia ? (body || '(Image received)') : body;
-    if (smsText) await sendSms(smsText, senderName);
+    if (smsText) {
+      const smsFrom = groupName ? `${senderName} (${groupName})` : senderName;
+      await sendSms(smsText, smsFrom);
+    }
   } catch (err) {
     io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
   }
