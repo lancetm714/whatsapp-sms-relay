@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY . .
 
