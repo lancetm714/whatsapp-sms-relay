@@ -4,13 +4,13 @@ const http = require('http');
 const socketIo = require('socket.io');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
-const twilio = require('twilio');
+const { Vonage } = require('@vonage/server-sdk');
 const path = require('path');
 
 const PORT = process.env.PORT || 3000;
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
+const VONAGE_API_KEY = process.env.VONAGE_API_KEY;
+const VONAGE_API_SECRET = process.env.VONAGE_API_SECRET;
+const VONAGE_FROM_NUMBER = process.env.VONAGE_FROM_NUMBER;
 const SMS_TO_NUMBER = process.env.SMS_TO_NUMBER;
 const RELAY_WHATSAPP_FROM = process.env.RELAY_WHATSAPP_FROM || '';
 
@@ -21,9 +21,9 @@ const io = socketIo(server);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-let twilioClient = null;
-if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER) {
-  twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+let vonageClient = null;
+if (VONAGE_API_KEY && VONAGE_API_SECRET && VONAGE_FROM_NUMBER) {
+  vonageClient = new Vonage({ apiKey: VONAGE_API_KEY, apiSecret: VONAGE_API_SECRET });
 }
 
 const whatsapp = new Client({
@@ -42,7 +42,7 @@ const whatsapp = new Client({
 
 let qrCodeData = null;
 let whatsappStatus = 'initializing';
-let smsStatus = twilioClient ? 'ready' : 'unconfigured';
+let smsStatus = vonageClient ? 'ready' : 'unconfigured';
 const maxMessages = 200;
 const messages = [];
 const seenMessageIds = new Set();
@@ -59,7 +59,7 @@ async function sendSms(body, from) {
 
   const targets = (SMS_TO_NUMBER || '').split(',').map((s) => s.trim()).filter(Boolean);
 
-  if (!twilioClient || !targets.length) {
+  if (!vonageClient || !targets.length) {
     addMessage({
       type: 'sms', to: targets.join(', ') || '(not configured)',
       body: messageBody, status: 'stub', sid: 'dry-run', timestamp: new Date().toISOString(),
@@ -72,9 +72,11 @@ async function sendSms(body, from) {
       type: 'sms', to, body: messageBody, status: 'sending', timestamp: new Date().toISOString(),
     };
     try {
-      const result = await twilioClient.messages.create({ body: messageBody, from: TWILIO_FROM_NUMBER, to });
-      smsEntry.status = 'sent';
-      smsEntry.sid = result.sid;
+      const result = await vonageClient.sms.send({ to, from: VONAGE_FROM_NUMBER, text: messageBody });
+      const msgInfo = result.messages[0];
+      smsEntry.status = msgInfo.status === '0' ? 'sent' : 'failed';
+      smsEntry.sid = msgInfo['message-id'];
+      if (msgInfo.status !== '0') smsEntry.error = msgInfo['error-text'];
     } catch (err) {
       smsEntry.status = 'failed';
       smsEntry.error = err.message;
@@ -148,7 +150,7 @@ app.get('/api/messages', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   res.json({
-    'SMS Provider': twilioClient ? 'Twilio' : 'Dry-run (no SMS)',
+    'SMS Provider': vonageClient ? 'Vonage' : 'Dry-run (no SMS)',
     'SMS To': SMS_TO_NUMBER || '(not set)',
     'WhatsApp From Filter': RELAY_WHATSAPP_FROM || 'All numbers',
     'WhatsApp Status': whatsappStatus,
