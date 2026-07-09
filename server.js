@@ -53,9 +53,8 @@ function addMessage(entry) {
   io.emit('message', entry);
 }
 
-async function sendSms(body, from) {
-  const senderInfo = from ? `From WhatsApp (${from})` : '';
-  const messageBody = senderInfo ? `${senderInfo}: ${body}` : body;
+async function sendSms(body, _from) {
+  const messageBody = body;
 
   const targets = (SMS_TO_NUMBER || '').split(',').map((s) => s.trim()).filter(Boolean);
 
