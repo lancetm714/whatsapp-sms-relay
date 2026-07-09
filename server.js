@@ -109,71 +109,79 @@ whatsapp.on('disconnected', (reason) => {
 });
 
 whatsapp.on('message', async (msg) => {
-  if (msg.fromMe) return;
-
-  const from = msg.from;
-  const body = msg.body;
-  const hasMedia = msg.hasMedia;
-
-  if (!body && !hasMedia) return;
-
-  if (seenMessageIds.has(msg.id.id)) return;
-  seenMessageIds.add(msg.id.id);
-  if (seenMessageIds.size > 10000) seenMessageIds.clear();
-
-  const isGroup = from.endsWith('@g.us');
-  let senderName;
-  let groupName = null;
-
-  if (isGroup) {
-    const chat = await msg.getChat();
-    groupName = chat.name;
-    const authorContact = await whatsapp.getContactById(msg.author);
-    senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
-  } else {
-    const contact = await msg.getContact();
-    senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
-  }
-
-  if (RELAY_WHATSAPP_FROM) {
-    const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
-    const bareNumber = from.split('@')[0];
-    if (!allowed.includes(from) && !allowed.includes(bareNumber)) {
-      return;
-    }
-  }
-
-  let mediaUrl = null;
-  if (hasMedia) {
-    try {
-      const media = await msg.downloadMedia();
-      const ext = media.mimetype.split('/')[1] || 'bin';
-      const filename = `${msg.id.id}.${ext}`;
-      fs.writeFileSync(path.join(mediaDir, filename), media.data, 'base64');
-      mediaUrl = `/media/${filename}`;
-    } catch (err) {
-      console.error('Media download failed:', err.message);
-    }
-  }
-
-  addMessage({
-    type: 'whatsapp',
-    from: senderName,
-    raw: from,
-    body: body || (mediaUrl ? '[Media]' : ''),
-    mediaUrl,
-    groupName,
-    timestamp: new Date().toISOString(),
-  });
-
   try {
-    const smsText = hasMedia ? (body || '(Image received)') : body;
-    if (smsText) {
-      const smsFrom = groupName ? `${senderName} (${groupName})` : senderName;
-      await sendSms(smsText, smsFrom);
+    if (msg.fromMe) return;
+
+    const from = msg.from;
+    const body = msg.body;
+    const hasMedia = msg.hasMedia;
+
+    if (!body && !hasMedia) return;
+
+    if (seenMessageIds.has(msg.id.id)) return;
+    seenMessageIds.add(msg.id.id);
+    if (seenMessageIds.size > 10000) seenMessageIds.clear();
+
+    const isGroup = from.endsWith('@g.us');
+    let senderName;
+    let groupName = null;
+
+    if (isGroup) {
+      const chat = await msg.getChat();
+      groupName = chat.name;
+      if (msg.author) {
+        const authorContact = await whatsapp.getContactById(msg.author);
+        senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+      } else {
+        senderName = groupName;
+      }
+    } else {
+      const contact = await msg.getContact();
+      senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
+    }
+
+    if (RELAY_WHATSAPP_FROM) {
+      const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
+      const bareNumber = from.split('@')[0];
+      if (!allowed.includes(from) && !allowed.includes(bareNumber)) {
+        return;
+      }
+    }
+
+    let mediaUrl = null;
+    if (hasMedia) {
+      try {
+        const media = await msg.downloadMedia();
+        const ext = media.mimetype.split('/')[1] || 'bin';
+        const filename = `${msg.id.id}.${ext}`;
+        fs.writeFileSync(path.join(mediaDir, filename), media.data, 'base64');
+        mediaUrl = `/media/${filename}`;
+      } catch (err) {
+        console.error('Media download failed:', err.message);
+      }
+    }
+
+    addMessage({
+      type: 'whatsapp',
+      from: senderName,
+      raw: from,
+      body: body || (mediaUrl ? '[Media]' : ''),
+      mediaUrl,
+      groupName,
+      timestamp: new Date().toISOString(),
+    });
+
+    try {
+      const smsText = hasMedia ? (body || '(Image received)') : body;
+      if (smsText) {
+        const smsFrom = groupName ? `${senderName} (${groupName})` : senderName;
+        await sendSms(smsText, smsFrom);
+      }
+    } catch (err) {
+      io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
     }
   } catch (err) {
-    io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
+    console.error('Message handler error:', err.message);
   }
 });
 
