@@ -70,6 +70,15 @@ function appendLog(entry) {
     from.textContent = entry.from + ': ';
     div.appendChild(from);
 
+    if (entry.mediaUrl) {
+      const img = document.createElement('img');
+      img.className = 'media-thumb';
+      img.src = entry.mediaUrl;
+      img.alt = 'media';
+      img.addEventListener('click', () => window.open(entry.mediaUrl, '_blank'));
+      div.appendChild(img);
+    }
+
     const body = document.createElement('span');
     body.className = 'body';
     body.textContent = entry.body;

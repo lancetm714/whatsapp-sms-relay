@@ -213,6 +213,16 @@ main {
   word-break: break-word;
 }
 
+.media-thumb {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 6px;
+  display: block;
+  margin: 4px 0;
+  cursor: pointer;
+  border: 1px solid #334155;
+}
+
 .log-entry .sid {
   color: #475569;
   font-size: 0.7rem;

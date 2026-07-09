@@ -6,6 +6,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const { Vonage } = require('@vonage/server-sdk');
 const path = require('path');
+const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
 const VONAGE_API_KEY = process.env.VONAGE_API_KEY;
@@ -20,6 +21,10 @@ const io = socketIo(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+app.use('/media', express.static(path.join(__dirname, 'media')));
+
+const mediaDir = path.join(__dirname, 'media');
+if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 
 let vonageClient = null;
 if (VONAGE_API_KEY && VONAGE_API_SECRET && VONAGE_FROM_NUMBER) {
@@ -108,8 +113,9 @@ whatsapp.on('message', async (msg) => {
 
   const from = msg.from;
   const body = msg.body;
+  const hasMedia = msg.hasMedia;
 
-  if (!body) return;
+  if (!body && !hasMedia) return;
 
   if (seenMessageIds.has(msg.id.id)) return;
   seenMessageIds.add(msg.id.id);
@@ -126,16 +132,31 @@ whatsapp.on('message', async (msg) => {
     }
   }
 
+  let mediaUrl = null;
+  if (hasMedia) {
+    try {
+      const media = await msg.downloadMedia();
+      const ext = media.mimetype.split('/')[1] || 'bin';
+      const filename = `${msg.id.id}.${ext}`;
+      fs.writeFileSync(path.join(mediaDir, filename), media.data, 'base64');
+      mediaUrl = `/media/${filename}`;
+    } catch (err) {
+      console.error('Media download failed:', err.message);
+    }
+  }
+
   addMessage({
     type: 'whatsapp',
     from: senderName,
     raw: from,
-    body,
+    body: body || (mediaUrl ? '[Media]' : ''),
+    mediaUrl,
     timestamp: new Date().toISOString(),
   });
 
   try {
-    await sendSms(body, senderName);
+    const smsText = hasMedia ? (body || '(Image received)') : body;
+    if (smsText) await sendSms(smsText, senderName);
   } catch (err) {
     io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
   }
