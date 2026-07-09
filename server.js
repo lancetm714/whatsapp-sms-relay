@@ -45,6 +45,7 @@ let whatsappStatus = 'initializing';
 let smsStatus = twilioClient ? 'ready' : 'unconfigured';
 const maxMessages = 200;
 const messages = [];
+const seenMessageIds = new Set();
 
 function addMessage(entry) {
   messages.push(entry);
@@ -106,6 +107,12 @@ whatsapp.on('message', async (msg) => {
 
   const from = msg.from;
   const body = msg.body;
+
+  if (!body) return;
+
+  if (seenMessageIds.has(msg.id.id)) return;
+  seenMessageIds.add(msg.id.id);
+  if (seenMessageIds.size > 10000) seenMessageIds.clear();
 
   if (RELAY_WHATSAPP_FROM) {
     const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
