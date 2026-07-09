@@ -5,7 +5,7 @@ services:
     image: ghcr.io/lancetm714/whatsapp-sms-relay:latest
     container_name: whatsapp-sms-relay
     ports:
-      - "3000:3000"
+      - "5215:3000"
     env_file: .env
     volumes:
       - ./wwebjs_auth:/app/wwebjs_auth
