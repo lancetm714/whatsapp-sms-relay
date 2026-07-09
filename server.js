@@ -116,6 +116,9 @@ whatsapp.on('message', async (msg) => {
   seenMessageIds.add(msg.id.id);
   if (seenMessageIds.size > 10000) seenMessageIds.clear();
 
+  const contact = await msg.getContact();
+  const senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
+
   if (RELAY_WHATSAPP_FROM) {
     const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
     const bareNumber = from.split('@')[0];
@@ -126,13 +129,14 @@ whatsapp.on('message', async (msg) => {
 
   addMessage({
     type: 'whatsapp',
-    from,
+    from: senderName,
+    raw: from,
     body,
     timestamp: new Date().toISOString(),
   });
 
   try {
-    await sendSms(body, from);
+    await sendSms(body, senderName);
   } catch (err) {
     io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
   }
