@@ -8,8 +8,8 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
-const VENDEL_API_KEY = process.env.VENDEL_API_KEY;
-const VENDEL_BASE_URL = (process.env.VENDEL_BASE_URL || 'https://app.vendel.cc').replace(/\/$/, '');
+const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
+const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
 const SMS_TO_NUMBER = process.env.SMS_TO_NUMBER;
 const RELAY_WHATSAPP_FROM = process.env.RELAY_WHATSAPP_FROM || '';
 
@@ -24,7 +24,7 @@ app.use('/media', express.static(path.join(__dirname, 'media')));
 const mediaDir = path.join(__dirname, 'media');
 if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 
-let smsProvider = VENDEL_API_KEY ? 'vendel' : 'stub';
+let smsProvider = TEXTBEE_API_KEY && TEXTBEE_DEVICE_ID ? 'textbee' : 'stub';
 
 const whatsapp = new Client({
   authStrategy: new LocalAuth({ clientId: 'relay' }),
@@ -71,19 +71,19 @@ async function sendSms(body, from) {
       type: 'sms', to, body: messageBody, status: 'sending', timestamp: new Date().toISOString(),
     };
     try {
-      const res = await fetch(`${VENDEL_BASE_URL}/api/sms/send`, {
+      const res = await fetch(`https://api.textbee.dev/api/v1/gateway/devices/${TEXTBEE_DEVICE_ID}/send-sms`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': VENDEL_API_KEY },
-        body: JSON.stringify({ recipients: [to], body: messageBody }),
+        headers: { 'Content-Type': 'application/json', 'x-api-key': TEXTBEE_API_KEY },
+        body: JSON.stringify({ recipients: [to], message: messageBody }),
       });
       const data = await res.json();
-      io.emit('log', { type: 'debug', text: `Vendel: ${res.status} ${JSON.stringify(data)}`, timestamp: new Date().toISOString() });
-      if (res.ok && data.message_ids) {
-        smsEntry.status = 'accepted';
-        smsEntry.sid = data.message_ids[0];
+      io.emit('log', { type: 'debug', text: `Textbee: ${res.status} ${JSON.stringify(data)}`, timestamp: new Date().toISOString() });
+      if (res.ok) {
+        smsEntry.status = 'sent';
+        smsEntry.sid = data.id || 'ok';
       } else {
         smsEntry.status = 'failed';
-        smsEntry.error = data.error || data.message || `HTTP ${res.status}`;
+        smsEntry.error = data.message || data.error || `HTTP ${res.status}`;
       }
     } catch (err) {
       smsEntry.status = 'failed';
@@ -201,7 +201,7 @@ app.get('/api/messages', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   res.json({
-    'SMS Provider': smsProvider === 'vendel' ? 'Vendel' : 'Dry-run (no SMS)',
+    'SMS Provider': smsProvider === 'textbee' ? 'Textbee' : 'Dry-run (no SMS)',
     'SMS To': SMS_TO_NUMBER || '(not set)',
     'WhatsApp From Filter': RELAY_WHATSAPP_FROM || 'All numbers',
     'WhatsApp Status': whatsappStatus,
