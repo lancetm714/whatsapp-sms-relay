@@ -4,16 +4,12 @@ const http = require('http');
 const socketIo = require('socket.io');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
-const { Vonage } = require('@vonage/server-sdk');
 const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
 const VENDEL_API_KEY = process.env.VENDEL_API_KEY;
 const VENDEL_BASE_URL = (process.env.VENDEL_BASE_URL || 'https://app.vendel.cc').replace(/\/$/, '');
-const VONAGE_API_KEY = process.env.VONAGE_API_KEY;
-const VONAGE_API_SECRET = process.env.VONAGE_API_SECRET;
-const VONAGE_FROM_NUMBER = process.env.VONAGE_FROM_NUMBER;
 const SMS_TO_NUMBER = process.env.SMS_TO_NUMBER;
 const RELAY_WHATSAPP_FROM = process.env.RELAY_WHATSAPP_FROM || '';
 
@@ -28,13 +24,7 @@ app.use('/media', express.static(path.join(__dirname, 'media')));
 const mediaDir = path.join(__dirname, 'media');
 if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 
-let vonageClient = null;
-let smsProvider = 'stub';
-if (VENDEL_API_KEY) {
-  smsProvider = 'vendel';
-} else if (VONAGE_API_KEY && VONAGE_API_SECRET && VONAGE_FROM_NUMBER) {
-  vonageClient = new Vonage({ apiKey: VONAGE_API_KEY, apiSecret: VONAGE_API_SECRET });
-  smsProvider = 'vonage';
+let smsProvider = VENDEL_API_KEY ? 'vendel' : 'stub';
 }
 
 const whatsapp = new Client({
@@ -82,26 +72,18 @@ async function sendSms(body, from) {
       type: 'sms', to, body: messageBody, status: 'sending', timestamp: new Date().toISOString(),
     };
     try {
-      if (smsProvider === 'vendel') {
-        const res = await fetch(`${VENDEL_BASE_URL}/api/sms/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': VENDEL_API_KEY },
-          body: JSON.stringify({ recipients: [to], body: messageBody }),
-        });
-        const data = await res.json();
-        if (res.ok && data.message_ids) {
-          smsEntry.status = 'sent';
-          smsEntry.sid = data.message_ids[0];
-        } else {
-          smsEntry.status = 'failed';
-          smsEntry.error = data.error || data.message || `HTTP ${res.status}`;
-        }
-      } else if (smsProvider === 'vonage') {
-        const result = await vonageClient.sms.send({ to, from: VONAGE_FROM_NUMBER, text: messageBody });
-        const msgInfo = result.messages[0];
-        smsEntry.status = msgInfo.status === '0' ? 'sent' : 'failed';
-        smsEntry.sid = msgInfo['message-id'];
-        if (msgInfo.status !== '0') smsEntry.error = msgInfo['error-text'];
+      const res = await fetch(`${VENDEL_BASE_URL}/api/sms/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': VENDEL_API_KEY },
+        body: JSON.stringify({ recipients: [to], body: messageBody }),
+      });
+      const data = await res.json();
+      if (res.ok && data.message_ids) {
+        smsEntry.status = 'sent';
+        smsEntry.sid = data.message_ids[0];
+      } else {
+        smsEntry.status = 'failed';
+        smsEntry.error = data.error || data.message || `HTTP ${res.status}`;
       }
     } catch (err) {
       smsEntry.status = 'failed';
@@ -219,7 +201,7 @@ app.get('/api/messages', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   res.json({
-    'SMS Provider': smsProvider === 'vendel' ? 'Vendel' : smsProvider === 'vonage' ? 'Vonage' : 'Dry-run (no SMS)',
+    'SMS Provider': smsProvider === 'vendel' ? 'Vendel' : 'Dry-run (no SMS)',
     'SMS To': SMS_TO_NUMBER || '(not set)',
     'WhatsApp From Filter': RELAY_WHATSAPP_FROM || 'All numbers',
     'WhatsApp Status': whatsappStatus,
