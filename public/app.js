@@ -112,6 +112,16 @@ function appendLog(entry) {
       sid.textContent = 'SID: ' + entry.sid;
       div.appendChild(sid);
     }
+  } else if (entry.type === 'debug') {
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-debug';
+    badge.textContent = 'DBG';
+    div.appendChild(badge);
+
+    const body = document.createElement('span');
+    body.className = 'body';
+    body.textContent = entry.text;
+    div.appendChild(body);
   } else if (entry.type === 'system' || entry.type === 'success' || entry.type === 'error') {
     const badge = document.createElement('span');
     badge.className = `badge badge-${entry.type}`;

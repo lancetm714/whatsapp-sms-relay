@@ -197,6 +197,7 @@ main {
 .badge-failed { background: #ef444422; color: #f87171; }
 .badge-error { background: #ef444422; color: #f87171; }
 .badge-success { background: #22c55e22; color: #4ade80; }
+.badge-debug { background: #a855f722; color: #c084fc; }
 
 .log-empty {
   color: #475569;

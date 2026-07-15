@@ -127,6 +127,7 @@ whatsapp.on('message', async (msg) => {
     if (seenMessageIds.size > 10000) seenMessageIds.clear();
 
     const isGroup = from.endsWith('@g.us');
+    addMessage({ type: 'debug', text: `MSG: from=${from} author=${msg.author} isGroup=${isGroup} body="${body.slice(0,50)}"`, timestamp: new Date().toISOString() });
     let senderName;
     let groupName = null;
 
@@ -134,8 +135,12 @@ whatsapp.on('message', async (msg) => {
       const chat = await msg.getChat();
       groupName = chat.name;
       if (msg.author) {
-        const authorContact = await whatsapp.getContactById(msg.author);
-        senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+        try {
+          const authorContact = await msg.getContact();
+          senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+        } catch {
+          senderName = msg.author.split('@')[0];
+        }
       } else {
         senderName = groupName;
       }
@@ -186,8 +191,8 @@ whatsapp.on('message', async (msg) => {
       io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
     }
   } catch (err) {
-    console.error('Message handler error:', err.message);
-    addMessage({ type: 'error', text: `Handler: ${err.message}`, timestamp: new Date().toISOString() });
+    console.error('Message handler error:', err);
+    addMessage({ type: 'error', text: `Handler: ${err.stack || err.message}`, timestamp: new Date().toISOString() });
   }
 });
 
