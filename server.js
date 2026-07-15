@@ -25,7 +25,6 @@ const mediaDir = path.join(__dirname, 'media');
 if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 
 let smsProvider = VENDEL_API_KEY ? 'vendel' : 'stub';
-}
 
 const whatsapp = new Client({
   authStrategy: new LocalAuth({ clientId: 'relay' }),
