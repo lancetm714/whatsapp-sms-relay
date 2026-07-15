@@ -127,13 +127,16 @@ whatsapp.on('message', async (msg) => {
     if (seenMessageIds.size > 10000) seenMessageIds.clear();
 
     const isGroup = from.endsWith('@g.us');
-    addMessage({ type: 'debug', text: `MSG: from=${from} author=${msg.author} isGroup=${isGroup} body="${body.slice(0,50)}"`, timestamp: new Date().toISOString() });
     let senderName;
     let groupName = null;
 
     if (isGroup) {
-      const chat = await msg.getChat();
-      groupName = chat.name;
+      try {
+        const chat = await msg.getChat();
+        groupName = chat.name;
+      } catch {
+        groupName = '(unknown group)';
+      }
       if (msg.author) {
         try {
           const authorContact = await msg.getContact();
