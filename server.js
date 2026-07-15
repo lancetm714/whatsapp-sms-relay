@@ -147,7 +147,8 @@ whatsapp.on('message', async (msg) => {
     if (RELAY_WHATSAPP_FROM) {
       const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
       const bareNumber = from.split('@')[0];
-      if (!allowed.includes(from) && !allowed.includes(bareNumber)) {
+      const authorBare = msg.author ? msg.author.split('@')[0] : null;
+      if (!allowed.includes(from) && !allowed.includes(bareNumber) && !allowed.includes(authorBare)) {
         return;
       }
     }
@@ -186,6 +187,7 @@ whatsapp.on('message', async (msg) => {
     }
   } catch (err) {
     console.error('Message handler error:', err.message);
+    addMessage({ type: 'error', text: `Handler: ${err.message}`, timestamp: new Date().toISOString() });
   }
 });
 
