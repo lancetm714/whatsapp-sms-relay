@@ -77,8 +77,9 @@ async function sendSms(body, from) {
         body: JSON.stringify({ recipients: [to], body: messageBody }),
       });
       const data = await res.json();
+      io.emit('log', { type: 'debug', text: `Vendel: ${res.status} ${JSON.stringify(data)}`, timestamp: new Date().toISOString() });
       if (res.ok && data.message_ids) {
-        smsEntry.status = 'sent';
+        smsEntry.status = 'accepted';
         smsEntry.sid = data.message_ids[0];
       } else {
         smsEntry.status = 'failed';
