@@ -131,6 +131,29 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
+      if (!global._loggedGcDebug) {
+        global._loggedGcDebug = true;
+        try {
+          const raw = await whatsapp.pupPage.evaluate(async (chatId) => {
+            const wid = window.Store.WidFactory.createWid(chatId);
+            const storeChat = window.Store.Chat.get(wid);
+            const storeFind = await window.Store.Chat.find(wid);
+            const wwebResult = await window.WWebJS.getChat(chatId);
+            return JSON.stringify({
+              storeChatExists: !!storeChat,
+              storeChatName: storeChat?.name,
+              storeChatFormattedTitle: storeChat?.formattedTitle,
+              storeFindExists: !!storeFind,
+              storeFindName: storeFind?.name,
+              storeFindFormattedTitle: storeFind?.formattedTitle,
+              wwebTitle: wwebResult?.formattedTitle,
+              wwebName: wwebResult?.name,
+              wwebKeys: Object.keys(wwebResult || {}).join(','),
+            });
+          }, from);
+          addMessage({ type: 'debug', text: `debug: ${raw}`, timestamp: new Date().toISOString() });
+        } catch (e) { addMessage({ type: 'debug', text: `debug err: ${e.message}`, timestamp: new Date().toISOString() }); }
+      }
       try {
         const chat = await whatsapp.pupPage.evaluate(async (chatId) => {
           return await window.WWebJS.getChat(chatId);
