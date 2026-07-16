@@ -131,23 +131,12 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      if (!groupName) try {
-        if (!global._loggedChatDebug) {
-          global._loggedChatDebug = true;
-          const raw = await whatsapp.pupPage.evaluate(chatId => {
-            try {
-              const chat = window.WWebJS?.getChat(chatId);
-              if (!chat) return JSON.stringify({ gotChat: false });
-              const keys = Object.keys(chat);
-              const attrs = chat.attributes || {};
-              const attrKeys = Object.keys(attrs);
-              return JSON.stringify({ gotChat: true, ownKeys: keys, attrKeys: attrKeys, 'attrs.name': attrs.name, 'attrs.id': attrs.id, 'chat.name': chat.name, 'chat.id': chat.id, constructor: chat.constructor?.name });
-            } catch (e) { return 'err:' + e.message; }
-          }, from);
-          addMessage({ type: 'debug', text: `deepchat: ${raw}`, timestamp: new Date().toISOString() });
-        }
+      try {
+        const chat = await whatsapp.pupPage.evaluate(async (chatId) => {
+          return await window.WWebJS.getChat(chatId);
+        }, from);
+        groupName = chat?.formattedTitle || chat?.name || null;
       } catch {}
-      if (!groupName) groupName = from.split('@')[0];
       if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
         try {
