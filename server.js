@@ -182,10 +182,20 @@ function attachHandlers() {
       if (isGroup) {
         try {
           const chat = await msg.getChat();
-          groupName = chat.name || chat.formattedTitle || from.split('@')[0];
-        } catch {
-          groupName = from.split('@')[0];
+          if (chat.fetch) await chat.fetch();
+          groupName = chat.name || chat.formattedTitle || null;
+        } catch {}
+        if (!groupName) {
+          try {
+            groupName = await whatsapp.pupPage.evaluate((chatId) => {
+              try {
+                const chat = window.require('WAWebCollections').Chat.get(chatId);
+                return chat?.name || chat?.formattedTitle || null;
+              } catch { return null; }
+            }, from);
+          } catch {}
         }
+        if (!groupName) groupName = from.split('@')[0];
         if (msg.author) {
           try {
             const authorContact = await msg.getContact();
