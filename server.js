@@ -131,14 +131,18 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const chat = await msg.getChat();
+        groupName = chat.name;
+      } catch {
         try {
-          const chat = await msg.getChat();
-          groupName = chat.name;
-          break;
-        } catch {
-          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
-        }
+          groupName = await whatsapp.pupPage.evaluate(chatId => {
+            const s = window.Store;
+            if (!s?.Chat) return null;
+            const chat = s.Chat.get(chatId) || s.Chat.getModelsArray().find(c => c.id._serialized === chatId);
+            return chat?.name || null;
+          }, from);
+        } catch {}
       }
       if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
