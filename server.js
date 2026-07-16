@@ -147,15 +147,15 @@ whatsapp.on('message', async (msg) => {
         } catch {}
       }
       if (!groupName) {
-        if (!global._loggedStoreKeys) {
-          global._loggedStoreKeys = true;
+        if (!global._debuggedStore) {
+          global._debuggedStore = true;
           try {
-            const windowKeys = await whatsapp.pupPage.evaluate(() => {
-              return Object.keys(window).filter(k => !k.startsWith('__')).slice(0, 30).join(',');
-            });
-            addMessage({ type: 'debug', text: `window keys: ${windowKeys}`, timestamp: new Date().toISOString() });
+            const pageUrl = await whatsapp.pupPage.evaluate(() => window.location.href);
+            addMessage({ type: 'debug', text: `Page URL: ${pageUrl}`, timestamp: new Date().toISOString() });
+            const allKeys = await whatsapp.pupPage.evaluate(() => Object.keys(window).join(','));
+            addMessage({ type: 'debug', text: `All keys (${allKeys.split(',').length}): ${allKeys.slice(0, 500)}`, timestamp: new Date().toISOString() });
           } catch (e) {
-            addMessage({ type: 'debug', text: `evaluate error: ${e.message}`, timestamp: new Date().toISOString() });
+            addMessage({ type: 'debug', text: `debug error: ${e.message}`, timestamp: new Date().toISOString() });
           }
         }
         groupName = from.split('@')[0];
