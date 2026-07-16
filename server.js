@@ -135,13 +135,17 @@ whatsapp.on('message', async (msg) => {
         const result = await whatsapp.pupPage.evaluate(chatId => {
           try {
             const chat = window.WWebJS?.getChat(chatId);
-            return JSON.stringify({ name: chat?.name, exists: !!chat, error: null });
+            if (chat) {
+              return JSON.stringify({ name: chat.name, type: typeof chat, keys: Object.keys(chat).slice(0, 10).join(',') });
+            }
+            return JSON.stringify({ name: null, type: typeof chat, keys: 'null' });
           } catch (e) {
-            return JSON.stringify({ name: null, exists: false, error: e?.message || String(e) });
+            return JSON.stringify({ name: null, error: e?.message || String(e), stack: (e?.stack || '').slice(0, 200) });
           }
         }, from);
         const parsed = JSON.parse(result);
-        if (parsed.error) addMessage({ type: 'debug', text: `getChat error: ${parsed.error}`, timestamp: new Date().toISOString() });
+        if (parsed.error) addMessage({ type: 'debug', text: `WWebJS.getChat error: ${parsed.error}`, timestamp: new Date().toISOString() });
+        addMessage({ type: 'debug', text: `WWebJS.getChat: name=${parsed.name}, type=${parsed.type}, keys=${parsed.keys}`, timestamp: new Date().toISOString() });
         groupName = parsed.name;
       } catch (e) {
         addMessage({ type: 'debug', text: `evaluate failed: ${e.message}`, timestamp: new Date().toISOString() });
