@@ -131,18 +131,6 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      if (!global._loggedGcName) try {
-        global._loggedGcName = true;
-        const raw = await whatsapp.pupPage.evaluate(chatId => {
-          try {
-            const mod = window.require('WAWebCollections');
-            const chat = mod.Chat.get(chatId);
-            const name = chat?.name || chat?.formattedTitle || null;
-            return JSON.stringify({ hasChat: !!chat, name, formattedTitle: chat?.formattedTitle, type: typeof chat });
-          } catch (e) { return 'err:' + String(e); }
-        }, from);
-        addMessage({ type: 'debug', text: `WAWeb: ${raw}`, timestamp: new Date().toISOString() });
-      } catch (e) { addMessage({ type: 'debug', text: `WAWeb err: ${e.message}`, timestamp: new Date().toISOString() }); }
       try {
         const name = await whatsapp.pupPage.evaluate(chatId => {
           try {
@@ -150,7 +138,7 @@ whatsapp.on('message', async (msg) => {
             return chat?.name || chat?.formattedTitle || null;
           } catch { return null; }
         }, from);
-        groupName = name;
+        if (name) groupName = name;
       } catch {}
       if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
