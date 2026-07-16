@@ -8,5 +8,8 @@ services:
       - "5215:3000"
     env_file: .env
     volumes:
-      - ./wwebjs_auth:/app/wwebjs_auth
+      - whatsapp_auth:/app/wwebjs_auth
     restart: unless-stopped
+
+volumes:
+  whatsapp_auth:
