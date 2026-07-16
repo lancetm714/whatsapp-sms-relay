@@ -132,42 +132,14 @@ whatsapp.on('message', async (msg) => {
 
     if (isGroup) {
       try {
-        const chat = await msg.getChat();
-        groupName = chat.name;
-      } catch {
-        try {
-          groupName = await whatsapp.pupPage.evaluate(chatId => {
-            const s = window.Store;
-            if (s?.Chat) {
-              const c = s.Chat.get(chatId) || s.Chat.getModelsArray().find(x => x.id._serialized === chatId);
-              if (c?.name) return c.name;
-            }
-            return null;
-          }, from);
-        } catch {}
-      }
-      if (!groupName) {
-        if (!global._debuggedStore) {
-          global._debuggedStore = true;
+        groupName = await whatsapp.pupPage.evaluate(chatId => {
           try {
-            const pageUrl = await whatsapp.pupPage.evaluate(() => window.location.href);
-            addMessage({ type: 'debug', text: `Page URL: ${pageUrl}`, timestamp: new Date().toISOString() });
-            const allKeys = await whatsapp.pupPage.evaluate(() => Object.keys(window).join(','));
-            const keys = allKeys.split(',');
-            addMessage({ type: 'debug', text: `Total keys: ${keys.length}`, timestamp: new Date().toISOString() });
-            addMessage({ type: 'debug', text: `Last 30 keys: ${keys.slice(-30).join(',')}`, timestamp: new Date().toISOString() });
-            const storeKeys = keys.filter(k => k.toLowerCase().includes('store') || k.toLowerCase().includes('webpack') || k.toLowerCase().includes('wwjs'));
-            if (storeKeys.length) addMessage({ type: 'debug', text: `Store-related keys: ${storeKeys.join(',')}`, timestamp: new Date().toISOString() });
-            const hasStore = await whatsapp.pupPage.evaluate(() => typeof window.Store !== 'undefined');
-            const hasWwebjs = await whatsapp.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined');
-            const hasRequire = await whatsapp.pupPage.evaluate(() => typeof window.require !== 'undefined');
-            addMessage({ type: 'debug', text: `Store: ${hasStore}, WWebJS: ${hasWwebjs}, require: ${hasRequire}`, timestamp: new Date().toISOString() });
-          } catch (e) {
-            addMessage({ type: 'debug', text: `debug error: ${e.message}`, timestamp: new Date().toISOString() });
-          }
-        }
-        groupName = from.split('@')[0];
-      }
+            const chat = window.WWebJS?.getChat(chatId);
+            return chat?.name || null;
+          } catch { return null; }
+        }, from);
+      } catch {}
+      if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
         try {
           const authorContact = await msg.getContact();
