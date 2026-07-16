@@ -131,17 +131,13 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      try {
-        const chat = await msg.getChat();
-        groupName = chat.name;
-      } catch {
+      for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          groupName = await whatsapp.pupPage.evaluate(chatId => {
-            const chat = window.Store?.Chat?.get(chatId);
-            return chat ? chat.name : null;
-          }, from);
+          const chat = await msg.getChat();
+          groupName = chat.name;
+          break;
         } catch {
-          groupName = null;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
         }
       }
       if (!groupName) groupName = from.split('@')[0];
