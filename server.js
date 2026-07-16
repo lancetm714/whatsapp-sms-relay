@@ -131,18 +131,20 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      try {
+      if (!groupName) try {
         if (!global._loggedChatDebug) {
           global._loggedChatDebug = true;
           const raw = await whatsapp.pupPage.evaluate(chatId => {
             try {
               const chat = window.WWebJS?.getChat(chatId);
-              if (!chat) return 'null';
-              const a = chat.attributes || chat;
-              return JSON.stringify({ name: chat.name, keys: Object.keys(a).join(','), nameFromAttrs: a['name'], sub: a['sub'] });
+              if (!chat) return JSON.stringify({ gotChat: false });
+              const keys = Object.keys(chat);
+              const attrs = chat.attributes || {};
+              const attrKeys = Object.keys(attrs);
+              return JSON.stringify({ gotChat: true, ownKeys: keys, attrKeys: attrKeys, 'attrs.name': attrs.name, 'attrs.id': attrs.id, 'chat.name': chat.name, 'chat.id': chat.id, constructor: chat.constructor?.name });
             } catch (e) { return 'err:' + e.message; }
           }, from);
-          addMessage({ type: 'debug', text: `chat debug: ${raw}`, timestamp: new Date().toISOString() });
+          addMessage({ type: 'debug', text: `deepchat: ${raw}`, timestamp: new Date().toISOString() });
         }
       } catch {}
       if (!groupName) groupName = from.split('@')[0];
