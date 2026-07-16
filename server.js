@@ -132,12 +132,18 @@ whatsapp.on('message', async (msg) => {
 
     if (isGroup) {
       try {
-        groupName = await whatsapp.pupPage.evaluate(chatId => {
-          try {
-            const chat = window.WWebJS?.getChat(chatId);
-            return chat?.name || chat?.get?.('name') || null;
-          } catch { return null; }
-        }, from);
+        if (!global._loggedChatDebug) {
+          global._loggedChatDebug = true;
+          const raw = await whatsapp.pupPage.evaluate(chatId => {
+            try {
+              const chat = window.WWebJS?.getChat(chatId);
+              if (!chat) return 'null';
+              const a = chat.attributes || chat;
+              return JSON.stringify({ name: chat.name, keys: Object.keys(a).join(','), nameFromAttrs: a['name'], sub: a['sub'] });
+            } catch (e) { return 'err:' + e.message; }
+          }, from);
+          addMessage({ type: 'debug', text: `chat debug: ${raw}`, timestamp: new Date().toISOString() });
+        }
       } catch {}
       if (!groupName) groupName = from.split('@')[0];
       if (!groupName) groupName = from.split('@')[0];
