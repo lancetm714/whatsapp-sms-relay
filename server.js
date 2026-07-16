@@ -191,7 +191,7 @@ whatsapp.on('message', async (msg) => {
     try {
       const smsText = hasMedia ? (body || '(Image received)') : body;
       if (smsText) {
-        const smsFrom = groupName ? `${senderName} (${groupName})` : senderName;
+        const smsFrom = groupName ? `(${groupName}) ${senderName}` : senderName;
         await sendSms(smsText, smsFrom);
       }
     } catch (err) {
