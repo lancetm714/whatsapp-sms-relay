@@ -138,13 +138,28 @@ whatsapp.on('message', async (msg) => {
         try {
           groupName = await whatsapp.pupPage.evaluate(chatId => {
             const s = window.Store;
-            if (!s?.Chat) return null;
-            const chat = s.Chat.get(chatId) || s.Chat.getModelsArray().find(c => c.id._serialized === chatId);
-            return chat?.name || null;
+            if (s?.Chat) {
+              const c = s.Chat.get(chatId) || s.Chat.getModelsArray().find(x => x.id._serialized === chatId);
+              if (c?.name) return c.name;
+            }
+            return null;
           }, from);
         } catch {}
       }
-      if (!groupName) groupName = from.split('@')[0];
+      if (!groupName) {
+        if (!global._loggedStoreKeys) {
+          global._loggedStoreKeys = true;
+          try {
+            const windowKeys = await whatsapp.pupPage.evaluate(() => {
+              return Object.keys(window).filter(k => !k.startsWith('__')).slice(0, 30).join(',');
+            });
+            addMessage({ type: 'debug', text: `window keys: ${windowKeys}`, timestamp: new Date().toISOString() });
+          } catch (e) {
+            addMessage({ type: 'debug', text: `evaluate error: ${e.message}`, timestamp: new Date().toISOString() });
+          }
+        }
+        groupName = from.split('@')[0];
+      }
       if (msg.author) {
         try {
           const authorContact = await msg.getContact();
