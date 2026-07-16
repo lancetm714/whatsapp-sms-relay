@@ -132,13 +132,20 @@ whatsapp.on('message', async (msg) => {
 
     if (isGroup) {
       try {
-        groupName = await whatsapp.pupPage.evaluate(chatId => {
+        const result = await whatsapp.pupPage.evaluate(chatId => {
           try {
             const chat = window.WWebJS?.getChat(chatId);
-            return chat?.name || null;
-          } catch { return null; }
+            return JSON.stringify({ name: chat?.name, exists: !!chat, error: null });
+          } catch (e) {
+            return JSON.stringify({ name: null, exists: false, error: e?.message || String(e) });
+          }
         }, from);
-      } catch {}
+        const parsed = JSON.parse(result);
+        if (parsed.error) addMessage({ type: 'debug', text: `getChat error: ${parsed.error}`, timestamp: new Date().toISOString() });
+        groupName = parsed.name;
+      } catch (e) {
+        addMessage({ type: 'debug', text: `evaluate failed: ${e.message}`, timestamp: new Date().toISOString() });
+      }
       if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
         try {
