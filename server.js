@@ -26,19 +26,24 @@ if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true });
 
 let smsProvider = TEXTBEE_API_KEY && TEXTBEE_DEVICE_ID ? 'textbee' : 'stub';
 
-const whatsapp = new Client({
-  authStrategy: new LocalAuth({ clientId: 'relay' }),
-  puppeteer: {
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-    executablePath: process.env.CHROMIUM_PATH || undefined,
-  },
-});
+let whatsapp;
+
+function createClient() {
+  whatsapp = new Client({
+    authStrategy: new LocalAuth({ clientId: 'relay' }),
+    puppeteer: {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+      executablePath: process.env.CHROMIUM_PATH || undefined,
+    },
+  });
+  return whatsapp;
+}
 
 let qrCodeData = null;
 let whatsappStatus = 'initializing';
@@ -93,116 +98,142 @@ async function sendSms(body, from) {
   }
 }
 
-whatsapp.on('qr', async (qr) => {
-  qrCodeData = await qrcode.toDataURL(qr);
-  whatsappStatus = 'awaiting_scan';
-  io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
-  io.emit('qr', qrCodeData);
-});
+function attachHandlers() {
+  whatsapp.on('qr', async (qr) => {
+    qrCodeData = await qrcode.toDataURL(qr);
+    whatsappStatus = 'awaiting_scan';
+    io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
+    io.emit('qr', qrCodeData);
+  });
 
-whatsapp.on('ready', () => {
-  whatsappStatus = 'connected';
-  io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
-  addMessage({ type: 'system', text: 'WhatsApp connected', timestamp: new Date().toISOString() });
-});
+  whatsapp.on('change_state', (state) => {
+    io.emit('log', { type: 'debug', text: `State: ${state}`, timestamp: new Date().toISOString() });
+  });
 
-whatsapp.on('disconnected', (reason) => {
-  whatsappStatus = 'disconnected';
-  io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
-  addMessage({ type: 'system', text: `WhatsApp disconnected: ${reason}`, timestamp: new Date().toISOString() });
-});
+  whatsapp.on('ready', () => {
+    whatsappStatus = 'connected';
+    io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
+    addMessage({ type: 'system', text: 'WhatsApp connected', timestamp: new Date().toISOString() });
+  });
 
-whatsapp.on('message', async (msg) => {
-  try {
-    if (msg.fromMe) return;
+  whatsapp.on('auth_failure', async (msg) => {
+    whatsappStatus = 'auth_failure';
+    io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
+    addMessage({ type: 'system', text: `Auth failure: ${msg}`, timestamp: new Date().toISOString() });
+    try { await whatsapp.destroy(); } catch {}
+    const authPath = path.join(__dirname, 'wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true });
+    }
+    setTimeout(() => {
+      createClient();
+      attachHandlers();
+      whatsapp.initialize();
+    }, 5000);
+  });
 
-    const from = msg.from;
-    const body = msg.body;
-    const hasMedia = msg.hasMedia;
+  whatsapp.on('disconnected', async (reason) => {
+    whatsappStatus = 'disconnected';
+    io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
+    addMessage({ type: 'system', text: `WhatsApp disconnected: ${reason}`, timestamp: new Date().toISOString() });
+    setTimeout(async () => {
+      try { await whatsapp.destroy(); } catch {}
+      createClient();
+      attachHandlers();
+      whatsapp.initialize();
+    }, 5000);
+  });
 
-    if (!body && !hasMedia) return;
+  whatsapp.on('message', async (msg) => {
+    try {
+      if (msg.fromMe) return;
 
-    if (seenMessageIds.has(msg.id.id)) return;
-    seenMessageIds.add(msg.id.id);
-    if (seenMessageIds.size > 10000) seenMessageIds.clear();
+      const from = msg.from;
+      const body = msg.body;
+      const hasMedia = msg.hasMedia;
 
-    const isGroup = from.endsWith('@g.us');
-    let senderName;
-    let groupName = null;
+      if (!body && !hasMedia) return;
 
-    if (isGroup) {
-      try {
-        const name = await whatsapp.pupPage.evaluate(chatId => {
-          try {
-            const chat = window.require('WAWebCollections').Chat.get(chatId);
-            return chat?.name || chat?.formattedTitle || null;
-          } catch { return null; }
-        }, from);
-        if (name) groupName = name;
-      } catch {}
-      if (!groupName) groupName = from.split('@')[0];
-      if (msg.author) {
+      if (seenMessageIds.has(msg.id.id)) return;
+      seenMessageIds.add(msg.id.id);
+      if (seenMessageIds.size > 10000) seenMessageIds.clear();
+
+      const isGroup = from.endsWith('@g.us');
+      let senderName;
+      let groupName = null;
+
+      if (isGroup) {
         try {
-          const authorContact = await msg.getContact();
-          senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+          const chat = await msg.getChat();
+          groupName = chat.name || chat.formattedTitle || from.split('@')[0];
         } catch {
-          senderName = msg.author.split('@')[0];
+          groupName = from.split('@')[0];
+        }
+        if (msg.author) {
+          try {
+            const authorContact = await msg.getContact();
+            senderName = authorContact.pushname || authorContact.name || authorContact.number || msg.author.split('@')[0];
+          } catch {
+            senderName = msg.author.split('@')[0];
+          }
+        } else {
+          senderName = groupName;
         }
       } else {
-        senderName = groupName;
+        const contact = await msg.getContact();
+        senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
       }
-    } else {
-      const contact = await msg.getContact();
-      senderName = contact.pushname || contact.name || contact.number || from.split('@')[0];
-    }
 
-    if (RELAY_WHATSAPP_FROM) {
-      const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
-      const bareNumber = from.split('@')[0];
-      const authorBare = msg.author ? msg.author.split('@')[0] : null;
-      if (!allowed.includes(from) && !allowed.includes(bareNumber) && !allowed.includes(authorBare)) {
-        return;
+      if (RELAY_WHATSAPP_FROM) {
+        const allowed = RELAY_WHATSAPP_FROM.split(',').map((s) => s.trim());
+        const bareNumber = from.split('@')[0];
+        const authorBare = msg.author ? msg.author.split('@')[0] : null;
+        if (!allowed.includes(from) && !allowed.includes(bareNumber) && !allowed.includes(authorBare)) {
+          return;
+        }
       }
-    }
 
-    let mediaUrl = null;
-    if (hasMedia) {
+      let mediaUrl = null;
+      if (hasMedia) {
+        try {
+          const media = await msg.downloadMedia();
+          const ext = media.mimetype.split('/')[1] || 'bin';
+          const filename = `${msg.id.id}.${ext}`;
+          fs.writeFileSync(path.join(mediaDir, filename), media.data, 'base64');
+          mediaUrl = `/media/${filename}`;
+        } catch (err) {
+          console.error('Media download failed:', err.message);
+        }
+      }
+
+      addMessage({
+        type: 'whatsapp',
+        from: senderName,
+        raw: from,
+        body: body || (mediaUrl ? '[Media]' : ''),
+        mediaUrl,
+        groupName,
+        timestamp: new Date().toISOString(),
+      });
+
       try {
-        const media = await msg.downloadMedia();
-        const ext = media.mimetype.split('/')[1] || 'bin';
-        const filename = `${msg.id.id}.${ext}`;
-        fs.writeFileSync(path.join(mediaDir, filename), media.data, 'base64');
-        mediaUrl = `/media/${filename}`;
+        const smsText = hasMedia ? (body || '(Image received)') : body;
+        if (smsText) {
+          const smsFrom = groupName ? `(${groupName}) ${senderName}` : senderName;
+          await sendSms(smsText, smsFrom);
+        }
       } catch (err) {
-        console.error('Media download failed:', err.message);
-      }
-    }
-
-    addMessage({
-      type: 'whatsapp',
-      from: senderName,
-      raw: from,
-      body: body || (mediaUrl ? '[Media]' : ''),
-      mediaUrl,
-      groupName,
-      timestamp: new Date().toISOString(),
-    });
-
-    try {
-      const smsText = hasMedia ? (body || '(Image received)') : body;
-      if (smsText) {
-        const smsFrom = groupName ? `(${groupName}) ${senderName}` : senderName;
-        await sendSms(smsText, smsFrom);
+        io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
       }
     } catch (err) {
-      io.emit('log', { type: 'error', text: `SMS failed: ${err.message}`, timestamp: new Date().toISOString() });
+      console.error('Message handler error:', err);
+      addMessage({ type: 'error', text: `Handler: ${err.stack || err.message}`, timestamp: new Date().toISOString() });
     }
-  } catch (err) {
-    console.error('Message handler error:', err);
-    addMessage({ type: 'error', text: `Handler: ${err.stack || err.message}`, timestamp: new Date().toISOString() });
-  }
-});
+  });
+}
 
+createClient();
+attachHandlers();
 whatsapp.initialize();
 
 app.get('/api/status', (req, res) => {
