@@ -132,10 +132,9 @@ whatsapp.on('message', async (msg) => {
 
     if (isGroup) {
       try {
-        const chat = await msg.getChat();
-        groupName = chat.name;
+        groupName = msg._data?.chatName || (await msg.getChat()).name;
       } catch {
-        groupName = '(unknown group)';
+        groupName = msg._data?.sub || msg._data?.name || '(unknown group)';
       }
       if (msg.author) {
         try {
