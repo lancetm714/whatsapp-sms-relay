@@ -131,34 +131,26 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      if (!global._loggedGcDebug) {
-        global._loggedGcDebug = true;
-        try {
-          const raw = await whatsapp.pupPage.evaluate(async (chatId) => {
-            const wid = window.Store.WidFactory.createWid(chatId);
-            const storeChat = window.Store.Chat.get(wid);
-            const storeFind = await window.Store.Chat.find(wid);
-            const wwebResult = await window.WWebJS.getChat(chatId);
-            return JSON.stringify({
-              storeChatExists: !!storeChat,
-              storeChatName: storeChat?.name,
-              storeChatFormattedTitle: storeChat?.formattedTitle,
-              storeFindExists: !!storeFind,
-              storeFindName: storeFind?.name,
-              storeFindFormattedTitle: storeFind?.formattedTitle,
-              wwebTitle: wwebResult?.formattedTitle,
-              wwebName: wwebResult?.name,
-              wwebKeys: Object.keys(wwebResult || {}).join(','),
-            });
-          }, from);
-          addMessage({ type: 'debug', text: `debug: ${raw}`, timestamp: new Date().toISOString() });
-        } catch (e) { addMessage({ type: 'debug', text: `debug err: ${e.message}`, timestamp: new Date().toISOString() }); }
-      }
-      try {
-        const chat = await whatsapp.pupPage.evaluate(async (chatId) => {
-          return await window.WWebJS.getChat(chatId);
+      if (!global._loggedGcName) try {
+        global._loggedGcName = true;
+        const raw = await whatsapp.pupPage.evaluate(chatId => {
+          try {
+            const mod = window.require('WAWebCollections');
+            const chat = mod.Chat.get(chatId);
+            const name = chat?.name || chat?.formattedTitle || null;
+            return JSON.stringify({ hasChat: !!chat, name, formattedTitle: chat?.formattedTitle, type: typeof chat });
+          } catch (e) { return 'err:' + String(e); }
         }, from);
-        groupName = chat?.formattedTitle || chat?.name || null;
+        addMessage({ type: 'debug', text: `WAWeb: ${raw}`, timestamp: new Date().toISOString() });
+      } catch (e) { addMessage({ type: 'debug', text: `WAWeb err: ${e.message}`, timestamp: new Date().toISOString() }); }
+      try {
+        const name = await whatsapp.pupPage.evaluate(chatId => {
+          try {
+            const chat = window.require('WAWebCollections').Chat.get(chatId);
+            return chat?.name || chat?.formattedTitle || null;
+          } catch { return null; }
+        }, from);
+        groupName = name;
       } catch {}
       if (!groupName) groupName = from.split('@')[0];
       if (msg.author) {
