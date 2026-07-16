@@ -133,8 +133,17 @@ whatsapp.on('message', async (msg) => {
     if (isGroup) {
       try {
         groupName = msg._data?.chatName || (await msg.getChat()).name;
-      } catch {
-        groupName = msg._data?.sub || msg._data?.name || '(unknown group)';
+      } catch (getChatErr) {
+        try {
+          const chat = await whatsapp.getChatById(from);
+          groupName = chat.name;
+        } catch {
+          groupName = '(unknown group)';
+          if (!global._loggedGroupData) {
+            global._loggedGroupData = true;
+            addMessage({ type: 'debug', text: `_data keys: ${Object.keys(msg._data || {}).join(',')}`, timestamp: new Date().toISOString() });
+          }
+        }
       }
       if (msg.author) {
         try {
