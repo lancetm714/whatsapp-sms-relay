@@ -12,6 +12,8 @@ const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
 const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
 const SMS_TO_NUMBER = process.env.SMS_TO_NUMBER;
 const RELAY_WHATSAPP_FROM = process.env.RELAY_WHATSAPP_FROM || '';
+const DISCONNECT_ALERT_MINUTES = parseInt(process.env.DISCONNECT_ALERT_MINUTES, 10) || 5;
+const DISCONNECT_ALERT_TO = process.env.DISCONNECT_ALERT_TO || SMS_TO_NUMBER;
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +50,7 @@ function createClient() {
 let qrCodeData = null;
 let whatsappStatus = 'initializing';
 let smsStatus = smsProvider === 'stub' ? 'unconfigured' : 'ready';
+let disconnectAlertTimer = null;
 const maxMessages = 200;
 const messages = [];
 const seenMessageIds = new Set();
@@ -58,10 +61,10 @@ function addMessage(entry) {
   io.emit('message', entry);
 }
 
-async function sendSms(body, from) {
+async function sendSms(body, from, targetsOverride) {
   const messageBody = from ? `${from}: ${body}` : body;
 
-  const targets = (SMS_TO_NUMBER || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const targets = (targetsOverride || SMS_TO_NUMBER || '').split(',').map((s) => s.trim()).filter(Boolean);
 
   if (smsProvider === 'stub' || !targets.length) {
     addMessage({
@@ -112,6 +115,10 @@ function attachHandlers() {
 
   whatsapp.on('ready', () => {
     whatsappStatus = 'connected';
+    if (disconnectAlertTimer) {
+      clearTimeout(disconnectAlertTimer);
+      disconnectAlertTimer = null;
+    }
     io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
     addMessage({ type: 'system', text: 'WhatsApp connected', timestamp: new Date().toISOString() });
   });
@@ -136,6 +143,16 @@ function attachHandlers() {
     whatsappStatus = 'disconnected';
     io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
     addMessage({ type: 'system', text: `WhatsApp disconnected: ${reason}`, timestamp: new Date().toISOString() });
+
+    if (!disconnectAlertTimer && DISCONNECT_ALERT_MINUTES > 0) {
+      disconnectAlertTimer = setTimeout(async () => {
+        if (whatsappStatus === 'disconnected' || whatsappStatus === 'auth_failure') {
+          await sendSms(`WhatsApp has been disconnected for over ${DISCONNECT_ALERT_MINUTES} minutes. Check the relay.`, null, DISCONNECT_ALERT_TO);
+        }
+        disconnectAlertTimer = null;
+      }, DISCONNECT_ALERT_MINUTES * 60 * 1000);
+    }
+
     setTimeout(async () => {
       try { await whatsapp.destroy(); } catch {}
       createClient();
