@@ -153,7 +153,15 @@ whatsapp.on('message', async (msg) => {
             const pageUrl = await whatsapp.pupPage.evaluate(() => window.location.href);
             addMessage({ type: 'debug', text: `Page URL: ${pageUrl}`, timestamp: new Date().toISOString() });
             const allKeys = await whatsapp.pupPage.evaluate(() => Object.keys(window).join(','));
-            addMessage({ type: 'debug', text: `All keys (${allKeys.split(',').length}): ${allKeys.slice(0, 500)}`, timestamp: new Date().toISOString() });
+            const keys = allKeys.split(',');
+            addMessage({ type: 'debug', text: `Total keys: ${keys.length}`, timestamp: new Date().toISOString() });
+            addMessage({ type: 'debug', text: `Last 30 keys: ${keys.slice(-30).join(',')}`, timestamp: new Date().toISOString() });
+            const storeKeys = keys.filter(k => k.toLowerCase().includes('store') || k.toLowerCase().includes('webpack') || k.toLowerCase().includes('wwjs'));
+            if (storeKeys.length) addMessage({ type: 'debug', text: `Store-related keys: ${storeKeys.join(',')}`, timestamp: new Date().toISOString() });
+            const hasStore = await whatsapp.pupPage.evaluate(() => typeof window.Store !== 'undefined');
+            const hasWwebjs = await whatsapp.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined');
+            const hasRequire = await whatsapp.pupPage.evaluate(() => typeof window.require !== 'undefined');
+            addMessage({ type: 'debug', text: `Store: ${hasStore}, WWebJS: ${hasWwebjs}, require: ${hasRequire}`, timestamp: new Date().toISOString() });
           } catch (e) {
             addMessage({ type: 'debug', text: `debug error: ${e.message}`, timestamp: new Date().toISOString() });
           }
