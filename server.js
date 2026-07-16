@@ -46,6 +46,7 @@ let smsStatus = smsProvider === 'stub' ? 'unconfigured' : 'ready';
 const maxMessages = 200;
 const messages = [];
 const seenMessageIds = new Set();
+const groupNameCache = new Map();
 
 function addMessage(entry) {
   messages.push(entry);
@@ -100,10 +101,21 @@ whatsapp.on('qr', async (qr) => {
   io.emit('qr', qrCodeData);
 });
 
-whatsapp.on('ready', () => {
+whatsapp.on('ready', async () => {
   whatsappStatus = 'connected';
   io.emit('status', { whatsapp: whatsappStatus, sms: smsStatus });
   addMessage({ type: 'system', text: 'WhatsApp connected', timestamp: new Date().toISOString() });
+  try {
+    const chats = await whatsapp.getChats();
+    for (const chat of chats) {
+      if (chat.id._serialized?.endsWith('@g.us')) {
+        groupNameCache.set(chat.id._serialized, chat.name);
+      }
+    }
+    addMessage({ type: 'debug', text: `Cached ${groupNameCache.size} group names`, timestamp: new Date().toISOString() });
+  } catch (err) {
+    addMessage({ type: 'error', text: `Failed to cache groups: ${err.message}`, timestamp: new Date().toISOString() });
+  }
 });
 
 whatsapp.on('disconnected', (reason) => {
@@ -131,17 +143,19 @@ whatsapp.on('message', async (msg) => {
     let groupName = null;
 
     if (isGroup) {
-      try {
-        groupName = msg._data?.chatName || (await msg.getChat()).name;
-      } catch (getChatErr) {
+      groupName = groupNameCache.get(from);
+      if (!groupName) {
         try {
-          const chat = await whatsapp.getChatById(from);
+          const chat = await msg.getChat();
           groupName = chat.name;
+          if (groupName) groupNameCache.set(from, groupName);
         } catch {
-          groupName = '(unknown group)';
-          if (!global._loggedGroupData) {
-            global._loggedGroupData = true;
-            addMessage({ type: 'debug', text: `_data keys: ${Object.keys(msg._data || {}).join(',')}`, timestamp: new Date().toISOString() });
+          try {
+            const chat = await whatsapp.getChatById(from);
+            groupName = chat.name;
+            if (groupName) groupNameCache.set(from, groupName);
+          } catch {
+            groupName = '(unknown group)';
           }
         }
       }
